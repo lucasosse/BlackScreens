@@ -241,7 +241,7 @@
             <TextBlock Grid.Row="3" Grid.Column="0" HorizontalAlignment="Center" Name="tbScreen4AltKeyInfo" Text="{x:Static rs:Resources.alt4_switch}"></TextBlock>
             <TextBlock Grid.Row="3" Grid.Column="1" HorizontalAlignment="Center" Name="tbScreen5AltKeyInfo" Text="{x:Static rs:Resources.alt5_switch}"></TextBlock>
             <TextBlock Grid.Row="3" Grid.Column="2" HorizontalAlignment="Center" Name="tbScreen6AltKeyInfo" Text="{x:Static rs:Resources.alt6_switch}"></TextBlock>
-            <TextBlock Grid.Row="4" Grid.Column="0" HorizontalAlignment="Center" Name="tbScreen4Name" Text="{Binding Screen1Name}" ToolTipService.ShowDuration="500000">
+            <TextBlock Grid.Row="4" Grid.Column="0" HorizontalAlignment="Center" Name="tbScreen4Name" Text="{Binding Screen4Name}" ToolTipService.ShowDuration="500000">
                 <TextBlock.ToolTip>
                     <TextBlock Name="ttScreen4">
                         <Run Text="Left: "/><Run Text="{Binding Screen4TooltipData.Left, Mode=OneWay}"></Run>
@@ -259,7 +259,7 @@
                     </TextBlock>
                 </TextBlock.ToolTip>
             </TextBlock>
-            <TextBlock Grid.Row="4" Grid.Column="1" HorizontalAlignment="Center" Name="tbScreen5Name" Text="{Binding Screen2Name}" ToolTipService.ShowDuration="500000">
+            <TextBlock Grid.Row="4" Grid.Column="1" HorizontalAlignment="Center" Name="tbScreen5Name" Text="{Binding Screen5Name}" ToolTipService.ShowDuration="500000">
                 <TextBlock.ToolTip>
                     <TextBlock Name="ttScreen5">
                         <Run Text="Left: "/><Run Text="{Binding Screen5TooltipData.Left, Mode=OneWay}"></Run>
@@ -277,7 +277,7 @@
                     </TextBlock>
                 </TextBlock.ToolTip>
             </TextBlock>
-            <TextBlock Grid.Row="4" Grid.Column="2" HorizontalAlignment="Center" Name="tbScreen6Name" Text="{Binding Screen3Name}" ToolTipService.ShowDuration="500000">
+            <TextBlock Grid.Row="4" Grid.Column="2" HorizontalAlignment="Center" Name="tbScreen6Name" Text="{Binding Screen6Name}" ToolTipService.ShowDuration="500000">
                 <TextBlock.ToolTip>
                     <TextBlock Name="ttScreen6">
                         <Run Text="Left: "/><Run Text="{Binding Screen6TooltipData.Left, Mode=OneWay}"></Run>

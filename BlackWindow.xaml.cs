@@ -8,7 +8,6 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using WindowsDisplayAPI.DisplayConfig;
 
 namespace BlackScreensWPF
 {
@@ -36,9 +35,8 @@ namespace BlackScreensWPF
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
-        private string screenDeviceName = "";
         private int screenNumber = -1;
-        private Screen currentScreen;
+        private MonitorInfo monitor;
         private string keyToUse;
         private DispatcherTimer mouseCursorTimer = new DispatcherTimer();
 
@@ -47,14 +45,14 @@ namespace BlackScreensWPF
         private Storyboard sbKeyboardHelp;
 
         public int ScreenNumber { get => screenNumber; set => screenNumber = value; }
-        public string ScreenDeviceName { get => screenDeviceName; set => screenDeviceName = value; }
+        /// <summary>Monitor this window was last shown on (null before first show)</summary>
+        public MonitorInfo Monitor { get => monitor; }
         public string KeyToUse { get => keyToUse; set => keyToUse = value; }
         public System.Windows.DpiScale currentDpi { get => getScreenDPI(); }
 
         public BlackWindow()
         {
             InitializeComponent();
-            updateScreenDeviceName();
             this.DataContext = CommonData.dataInstance;
             createAllStoryBoards();            
         }
@@ -110,21 +108,6 @@ namespace BlackScreensWPF
             }
         }
 
-        /// <summary>
-        /// Update the current device name (real screen name) of this window
-        /// </summary>
-        public void updateScreenDeviceName()
-        {
-            System.Windows.Interop.WindowInteropHelper wih = new System.Windows.Interop.WindowInteropHelper(this);
-            this.currentScreen = Screen.FromHandle(wih.Handle);
-            this.screenDeviceName = currentScreen.DeviceName;
-
-            if (ScreenNumber > -1) { 
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[ScreenNumber-1].DeviceName);
-                this.screenDeviceName = Screen.AllScreens[ScreenNumber - 1].DeviceName;
-            }
-        }
-
         private void putWindowsOnTop()
         {
             CommonData.dataInstance.LogToFile.Debug("BlackWindow.putWindowsOnTop()");
@@ -137,8 +120,7 @@ namespace BlackScreensWPF
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             CommonData.dataInstance.LogToFile.Debug("BlackWindow.Window_Loaded()");
-            setWindowsClickThrough(false);
-            updateScreenDeviceName();
+            setWindowsClickThrough(CommonData.dataInstance.ClickThrough);
             mouseCursorTimer.Tick += mouseCursorTimerTick;
             mouseCursorTimer.Interval = new TimeSpan(0, 0, 0, 0, 100);
             putWindowsOnTop();
@@ -161,8 +143,8 @@ namespace BlackScreensWPF
             var extendedStyle = GetWindowLong(wih.Handle, GWL_EXSTYLE);
             if (clickThrough) // Allow mouse clickthrough on this window
                 SetWindowLong(wih.Handle, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT);
-            else // Cancel mouse clickthrough
-                SetWindowLong(wih.Handle, GWL_EXSTYLE, 0);
+            else // Cancel mouse clickthrough, keeping the other extended styles (layered, tool window...)
+                SetWindowLong(wih.Handle, GWL_EXSTYLE, extendedStyle & ~WS_EX_TRANSPARENT);
         }
 
         private void spMain_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -218,12 +200,16 @@ namespace BlackScreensWPF
         /// <summary>
         /// Set everything for showing proper information for this BlackWindows
         /// </summary>
-        public void ShowWindow()
+        public void ShowWindow(MonitorInfo monitorToCover)
         {
-            CommonData.dataInstance.LogToFile.Debug("BlackWindow.ShowWindow()");
+            CommonData.dataInstance.LogToFile.Debug("BlackWindow.ShowWindow() on " + monitorToCover.DeviceName);
+            this.monitor = monitorToCover;
+            this.Left = monitorToCover.Bounds.Left;
+            this.Top = monitorToCover.Bounds.Top;
+            this.Width = monitorToCover.Bounds.Width;
+            this.Height = monitorToCover.Bounds.Height;
             this.tbKeyboardHelp.Text = this.KeyToUse;
-            updateScreenDeviceName();
-            this.tbScreenDeviceName.Text = CommonData.dataInstance.findDisplayByScreenName(this.screenDeviceName).FriendlyName;
+            this.tbScreenDeviceName.Text = monitorToCover.FriendlyName;
             Visibility vTexts = CommonData.dataInstance.HideTexts ? Visibility.Hidden : Visibility.Visible;
             tbScreenDeviceName.Visibility = vTexts;
             tbClickHelp.Visibility = vTexts;
@@ -239,6 +225,16 @@ namespace BlackScreensWPF
             /*DpiScale currentDpi = this.getScreenDPI();
             this.Height = this.Height / currentDpi.DpiScaleY;
             this.Width = this.Width / currentDpi.DpiScaleX;*/
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Alt+F4 on a black window: hide it instead, a closed window can't be shown again
+            if (!App.IsShuttingDown)
+            {
+                e.Cancel = true;
+                HideWindow();
+            }
         }
 
         private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)

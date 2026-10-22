@@ -1,23 +1,53 @@
 ﻿using BlackScreenAppWPF;
-using BlackScreens;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
 using System.Diagnostics;
-using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
-using System.Windows.Navigation;
-using WindowsDisplayAPI.DisplayConfig;
+using System.Windows.Threading;
 
 namespace BlackScreensWPF
 {
     public partial class App : System.Windows.Application
     {
         public KeyboardHook kh;
+
+        /// <summary>
+        /// True once the app is really quitting. Until then, closing a window only hides it
+        /// (a closed WPF window can never be shown again, which used to crash on the next tray click).
+        /// </summary>
+        public static bool IsShuttingDown { get; private set; }
+
+        // Displays often report several changes in a row while waking up, so refresh once they settle
+        private DispatcherTimer displayChangeTimer;
+
+        /// <summary>
+        /// Quit the application for real
+        /// </summary>
+        public static void Quit()
+        {
+            IsShuttingDown = true;
+            Current.Shutdown();
+        }
+
+        /// <summary>
+        /// Run an action, logging instead of crashing on failure. Used for every entry point called
+        /// from native code (keyboard hook, tray icon), where an exception would kill the process.
+        /// </summary>
+        public static void Safe(Action action, string where)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                CommonData.dataInstance.LogToFile.Error(ex, where + " failed");
+            }
+        }
 
         void App_Startup(object sender, StartupEventArgs e)
         {
@@ -26,31 +56,34 @@ namespace BlackScreensWPF
             // Check for duplicate launch of application
             String thisprocessname = Process.GetCurrentProcess().ProcessName;
             if (Process.GetProcesses().Count(p => p.ProcessName == thisprocessname) > 1)
-                App.Current.Shutdown();
+            {
+                Quit();
+                return;
+            }
 
-            // Initiating each screen tooltip
-            CommonData.dataInstance.Screen1TooltipData = Screen.AllScreens[0].Bounds;
-            CommonData.dataInstance.Screen2TooltipData = (Screen.AllScreens.Length > 1) ? Screen.AllScreens[1].Bounds : new Rectangle();
-            CommonData.dataInstance.Screen3TooltipData = (Screen.AllScreens.Length > 2) ? Screen.AllScreens[2].Bounds : new Rectangle();
-            CommonData.dataInstance.Screen4TooltipData = (Screen.AllScreens.Length > 3) ? Screen.AllScreens[3].Bounds : new Rectangle();
-            CommonData.dataInstance.Screen5TooltipData = (Screen.AllScreens.Length > 4) ? Screen.AllScreens[4].Bounds : new Rectangle();
-            CommonData.dataInstance.Screen6TooltipData = (Screen.AllScreens.Length > 5) ? Screen.AllScreens[5].Bounds : new Rectangle();
-
-            //bool result = System.Windows.UI.ViewManagement.ApplicationViewScaling.TrySetDisableLayoutScaling(true);
+            DispatcherUnhandledException += App_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+                CommonData.dataInstance.LogToFile.Fatal(args.ExceptionObject as Exception, "Unhandled exception");
+            TaskScheduler.UnobservedTaskException += (s, args) =>
+            {
+                CommonData.dataInstance.LogToFile.Error(args.Exception, "Unobserved task exception");
+                args.SetObserved();
+            };
+            CommonData.dataInstance.LogToFile.Info("Starting BlackScreens " + typeof(App).Assembly.GetName().Version);
 
             // Hook for listen to Windows Keys
             kh = new KeyboardHook(false);
             kh.KeyDown += Kh_KeyDown;
             kh.hook();
 
-            try
+            displayChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+            displayChangeTimer.Tick += (s, args) =>
             {
-                CommonData.dataInstance.Displays = PathDisplayTarget.GetDisplayTargets();
-            }
-            catch (Exception)
-            {
-
-            }
+                displayChangeTimer.Stop();
+                Safe(refreshAfterDisplayChange, "refreshAfterDisplayChange()");
+            };
+            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+            SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
 
             CommonData.dataInstance.FParams = new MainWindow();
             CommonData.dataInstance.loadUserConfigFile(CommonData.dataInstance.FParams);
@@ -68,10 +101,53 @@ namespace BlackScreensWPF
             CommonData.dataInstance.FirstAppLaunch = false;
         }
 
-        protected override void OnStartup(StartupEventArgs e)
+        private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            base.OnStartup(e);
+            CommonData.dataInstance.LogToFile.Error(e.Exception, "Unhandled UI exception");
+            // Keep running: a failed toggle is much better than losing the hotkeys until next boot
+            e.Handled = true;
+        }
 
+        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
+        {
+            // SystemEvents can fire on its own thread
+            Dispatcher.BeginInvoke(() =>
+            {
+                displayChangeTimer.Stop();
+                displayChangeTimer.Start();
+            });
+        }
+
+        private void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == PowerModes.Resume)
+                SystemEvents_DisplaySettingsChanged(sender, e);
+        }
+
+        /// <summary>
+        /// After monitors were added, removed, rearranged or woke up: put every visible black window
+        /// back on the physical monitor it was covering, or hide it if that monitor is gone.
+        /// </summary>
+        private void refreshAfterDisplayChange()
+        {
+            IReadOnlyList<MonitorInfo> monitors = Monitors.GetAll();
+            CommonData.dataInstance.LogToFile.Info("Display change: " + String.Join(", ",
+                monitors.Select((m, i) => (i + 1) + "=" + m.FriendlyName + " " + m.Bounds)));
+
+            BlackWindow[] blackWindows = CommonData.dataInstance.BlackWindows;
+            List<string> blackedDevicePaths = blackWindows
+                .Where(bw => (bw != null) && bw.IsVisible && (bw.Monitor != null))
+                .Select(bw => bw.Monitor.DevicePath)
+                .ToList();
+            hideAllBlackWindows(blackWindows);
+
+            for (int iMonitor = 0; iMonitor < monitors.Count && iMonitor < CommonData.MaxScreens; iMonitor++)
+            {
+                if (blackedDevicePaths.Contains(monitors[iMonitor].DevicePath))
+                    showBlackWindow(getOrCreateBlackWindow(iMonitor + 1), monitors[iMonitor], iMonitor + 1);
+            }
+
+            CommonData.dataInstance.FParams.updateScreenNames();
         }
 
         /// <summary>
@@ -92,16 +168,19 @@ namespace BlackScreensWPF
         }
 
         /// <summary>
-        /// Init a new BlackWindow
+        /// BlackWindow for this screen number (1 to 6), created the first time it is needed
         /// </summary>
-        /// <returns></returns>
-        private BlackWindow initNewBlackWindow(int screenNumber)
+        private BlackWindow getOrCreateBlackWindow(int screenNumber)
         {
-            // Creating first time BlackWindows for this screen
-            BlackWindow bw = new BlackWindow();
-            bw.ScreenNumber = screenNumber;
-            bw.updateBlackWindowParams();
-            return bw;
+            BlackWindow[] blackWindows = CommonData.dataInstance.BlackWindows;
+            if (blackWindows[screenNumber - 1] == null)
+            {
+                BlackWindow bw = new BlackWindow();
+                bw.ScreenNumber = screenNumber;
+                bw.updateBlackWindowParams();
+                blackWindows[screenNumber - 1] = bw;
+            }
+            return blackWindows[screenNumber - 1];
         }
 
         /// <summary>
@@ -120,26 +199,19 @@ namespace BlackScreensWPF
         /// <summary>
         /// Show a specific BlackWindow on associated screen
         /// </summary>
-        /// <param name="bsToShow">BlackWindow to show</param>
-        /// <param name="screen">Associated screen boundaries</param>
+        /// <param name="bwToShow">BlackWindow to show</param>
+        /// <param name="monitor">Monitor to cover</param>
         /// <param name="bwNumber">BlackWindow number (1 to 6)</param>
-        private void showBlackWindow(BlackWindow bwToShow, Screen screen, int bwNumber)
+        private void showBlackWindow(BlackWindow bwToShow, MonitorInfo monitor, int bwNumber)
         {
             String textAltToShow = "ALT + " + bwNumber;
-            Rectangle bounds = screen.Bounds;
-            //currentBlackWindow.Left = bounds.X;
-            //currentBlackWindow.Top = bounds.Y;
-            bwToShow.Left = bounds.Left;
-            bwToShow.Top = bounds.Top;
-            bwToShow.Height = bounds.Height;
-            bwToShow.Width = bounds.Width;
             bwToShow.KeyToUse = "Use key " + textAltToShow + " to switch";
             bwToShow.ScreenNumber = bwNumber;
-            bwToShow.ShowWindow();
+            bwToShow.ShowWindow(monitor);
             // Hidding parameters window if it's on the same black screen to switch visible
-            if (CommonData.dataInstance.ParamsScreenDeviceName == bwToShow.ScreenDeviceName)
+            CommonData.dataInstance.FParams.refreshMainWindowCurrentScreen();
+            if (CommonData.dataInstance.ParamsScreenDeviceName == monitor.DeviceName)
             {
-                //CommonData.dataInstance.FParams.WindowState = WindowState.Minimized;
                 CommonData.dataInstance.FParams.minimizeWindow();
             }
         }
@@ -147,14 +219,11 @@ namespace BlackScreensWPF
         /// <summary>
         /// Show all BlackWindows for all existing screens
         /// </summary>
-        /// <param name="blackWindows">BlackWindow Array</param>
-        private void showAllBlackWindows(BlackWindow[] blackWindows)
+        private void showAllBlackWindows(IReadOnlyList<MonitorInfo> monitors)
         {
-            for (int iBw=0; iBw < blackWindows.Length; iBw++)
+            for (int iMonitor = 0; iMonitor < monitors.Count && iMonitor < CommonData.MaxScreens; iMonitor++)
             {
-                if (blackWindows[iBw] == null)
-                    blackWindows[iBw] = initNewBlackWindow(iBw+1);
-                showBlackWindow(blackWindows[iBw], Screen.AllScreens[iBw], iBw+1);
+                showBlackWindow(getOrCreateBlackWindow(iMonitor + 1), monitors[iMonitor], iMonitor + 1);
             }
         }
 
@@ -170,90 +239,85 @@ namespace BlackScreensWPF
             }
         }
 
+        /// <summary>
+        /// Switch all screens: show all if at most half of them are black, else hide all
+        /// </summary>
+        private void toggleAllScreens()
+        {
+            IReadOnlyList<MonitorInfo> monitors = Monitors.GetAll();
+            int nbOfActiveScreen = numberOfActiveBlackScreen(CommonData.dataInstance.BlackWindows);
+            if (nbOfActiveScreen <= ((Double)monitors.Count / 2))
+                showAllBlackWindows(monitors);
+            else
+                hideAllBlackWindows(CommonData.dataInstance.BlackWindows);
+        }
+
+        /// <summary>
+        /// Switch one screen, screenNumber from 1 to 6
+        /// </summary>
+        private void toggleScreen(int screenNumber)
+        {
+            IReadOnlyList<MonitorInfo> monitors = Monitors.GetAll();
+            if (screenNumber > monitors.Count)
+                return;
+            BlackWindow currentBlackWindow = getOrCreateBlackWindow(screenNumber);
+            if (currentBlackWindow.IsVisible)
+            { // Hidding black screen window if already visible
+                hideBlackWindow(currentBlackWindow);
+            }
+            else
+            { // Showing Blackscreen window if not visible
+                showBlackWindow(currentBlackWindow, monitors[screenNumber - 1], screenNumber);
+            }
+        }
+
+        /// <summary>
+        /// Called by Windows inside the low level keyboard hook. Must return quickly (Windows silently
+        /// removes slow hooks) and must never throw, so the real work is queued on the dispatcher.
+        /// </summary>
         private bool Kh_KeyDown(int wParam, KeyboardHookData lParam)
         {
-            bool keyHandled = false;
-            Keys keyData = (Keys)lParam.vkCode;
-            // Testing alt+x key pressed
-
-            if (kh.AltHeld && !(kh.CtrlHeld || kh.ShiftHeld))
+            try
             {
-                int screenNumKey = -1;
-                if (keyData == Keys.D0) {
-                    keyHandled = true;
-                    int nbOfActiveScreen = numberOfActiveBlackScreen(CommonData.dataInstance.BlackWindows);
-                    // Showing all black screens if number of screens actually shows is less than half of existing screens
-                    if (nbOfActiveScreen <= ((Double)CommonData.dataInstance.BlackWindows.Length/2))
-                    {
-                        showAllBlackWindows(CommonData.dataInstance.BlackWindows);
-                    }
-                    else // Hide all screens
-                    if (nbOfActiveScreen > (CommonData.dataInstance.BlackWindows.Length / 2))
-                    {
-                        hideAllBlackWindows(CommonData.dataInstance.BlackWindows);
-                    }
-                } else
-                if (keyData == Keys.D1)
+                Keys keyData = (Keys)lParam.vkCode;
+                // Testing alt+x key pressed
+                if (!kh.AltHeld || kh.CtrlHeld || kh.ShiftHeld)
+                    return false;
+
+                if (keyData == Keys.D0)
                 {
-                    screenNumKey = 1;
-                    keyHandled = true;
+                    Dispatcher.BeginInvoke(() => Safe(toggleAllScreens, "toggleAllScreens()"));
+                    return true;
                 }
-                else
-                if ((keyData == Keys.D2) && (Screen.AllScreens.Length > 1))
+                int screenNumKey = keyData - Keys.D0;
+                if ((screenNumKey >= 1) && (screenNumKey <= CommonData.MaxScreens) && (screenNumKey <= Screen.AllScreens.Length))
                 {
-                    screenNumKey = 2;
-                    keyHandled = true;
-                }
-                else
-                if (keyData == Keys.D3 && (Screen.AllScreens.Length > 2))
-                {
-                    screenNumKey = 3;
-                    keyHandled = true;
-                }
-                else
-                if (keyData == Keys.D4 && (Screen.AllScreens.Length > 3))
-                {
-                    screenNumKey = 4;
-                    keyHandled = true;
-                }
-                else
-                if (keyData == Keys.D5 && (Screen.AllScreens.Length > 4))
-                {
-                    screenNumKey = 5;
-                    keyHandled = true;
-                }
-                else
-                if (keyData == Keys.D6 && (Screen.AllScreens.Length > 5))
-                {
-                    screenNumKey = 6;
-                    keyHandled = true;
-                }
-                // If any valide alt+X key, and screen associated
-                if ((screenNumKey > 0) && (screenNumKey <= Screen.AllScreens.Length))
-                {
-                    if (CommonData.dataInstance.BlackWindows[screenNumKey - 1] == null)
-                    { // Creating first time BlackWindows for this screen
-                        CommonData.dataInstance.BlackWindows[screenNumKey - 1] = initNewBlackWindow(screenNumKey);
-                    }
-                    BlackWindow currentBlackWindow = CommonData.dataInstance.BlackWindows[screenNumKey - 1];
-                    if (currentBlackWindow.IsVisible)
-                    { // Hidding black screen window if already visible
-                        hideBlackWindow(currentBlackWindow);
-                    }
-                    else
-                    { // Showing Blackscreen window if not visible
-                        showBlackWindow(currentBlackWindow, Screen.AllScreens[screenNumKey - 1], screenNumKey);
-                    }
+                    Dispatcher.BeginInvoke(() => Safe(() => toggleScreen(screenNumKey), "toggleScreen(" + screenNumKey + ")"));
+                    // If keyHandled == true, current keypressed will not be handled anymore by Windows
+                    // (in certain cases, let it continue to be handled by Microsoft Windows launch Windows system beep sound each time alt+x key was pressed...)
+                    return true;
                 }
             }
-            // If keyHandled == true, current keypressed will not be handled anymore by Windows
-            // (in certain cases, let it continue to be handled by Microsoft Windows launch Windows system beep sound each time alt+x key was pressed...)
-            return keyHandled;
+            catch (Exception ex)
+            {
+                CommonData.dataInstance.LogToFile.Error(ex, "Kh_KeyDown() failed");
+            }
+            return false;
         }
 
         void App_Exit(object sender, ExitEventArgs e)
         {
-            kh.unhook();
+            SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+            SystemEvents.PowerModeChanged -= SystemEvents_PowerModeChanged;
+            kh?.unhook();
+        }
+
+        protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+        {
+            // Windows logoff / shutdown: windows may be torn down without the usual Closing path
+            IsShuttingDown = true;
+            CommonData.dataInstance.saveUserConfigFiles();
+            base.OnSessionEnding(e);
         }
     }
 }

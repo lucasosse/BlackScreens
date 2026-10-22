@@ -5,7 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Interop;
-using WindowsDisplayAPI.DisplayConfig;
+using System.Collections.Generic;
 
 namespace BlackScreensWPF
 {
@@ -41,14 +41,8 @@ namespace BlackScreensWPF
 
         private void NotifyIcon_TrayLeftMouseDown(object sender, RoutedEventArgs e)
         {
-            if (this.WindowState == WindowState.Minimized)
-            {
-                showWindow();
-            }
-            else
-            {
-                minimizeWindow();
-            }
+            // Raised from the tray icon's native window procedure: never let an exception escape
+            App.Safe(toggleShowHideWindow, "NotifyIcon_TrayLeftMouseDown()");
         }
 
         public void minimizeWindow()
@@ -58,109 +52,39 @@ namespace BlackScreensWPF
         }
 
         /// <summary>
-        /// Update all screens names on application launch, and handle visibility of information on params window
+        /// Update all screens names (on launch and after any display change), and handle visibility of information on params window
         /// </summary>
         public void updateScreenNames()
         {
-            String setImage = BlackScreens.Properties.Resources.setImage; 
+            String setImage = BlackScreens.Properties.Resources.setImage;
             String stopUsingImage = BlackScreens.Properties.Resources.stopUsingImage;
             CommonData.dataInstance.LogToFile.Debug("updateScreenNames()");
-            if (Screen.AllScreens.Length > 0)
+            IReadOnlyList<MonitorInfo> monitors = Monitors.GetAll();
+            int nbScreens = monitors.Count;
+            for (int screenNumber = 1; screenNumber <= CommonData.MaxScreens; screenNumber++)
             {
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[0].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen1Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-                // Case of Windows not sending back any screen 1 name 
-                if (CommonData.dataInstance.Screen1Name.Length == 0)
-                {
-                    CommonData.dataInstance.Screen1Name = "No screen name";
-                }
-                // Update label for image usage, instead of black color
-                if (!String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen1))
-                {
-                    tbScreen1SetImage.Text = stopUsingImage;
-                }
-                else
-                    tbScreen1SetImage.Text = setImage;
+                MonitorInfo monitor = (screenNumber <= nbScreens) ? monitors[screenNumber - 1] : null;
+                CommonData.dataInstance.SetScreenName(screenNumber, monitor?.FriendlyName ?? "");
+                CommonData.dataInstance.SetScreenTooltipData(screenNumber, monitor?.Bounds ?? new System.Drawing.Rectangle());
             }
-            if (Screen.AllScreens.Length > 1)
-            {
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[1].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen2Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-                // Update label for image usage, instead of black color
-                if (!String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen2))
-                {
-                    tbScreen2SetImage.Text = stopUsingImage;
-                }
-                else
-                    tbScreen2SetImage.Text = setImage;
-            }
-            if (Screen.AllScreens.Length > 2)
-            {
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[2].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen3Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-                // Update label for image usage, instead of black color
-                if (!String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen3))
-                {
-                    tbScreen3SetImage.Text = stopUsingImage;
-                }
-                else
-                    tbScreen3SetImage.Text = setImage;
-            }
-            if (Screen.AllScreens.Length > 3)
-            {
-                tbScreen4Name.Visibility = Visibility.Visible;
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[3].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen4Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-            }
-            if (Screen.AllScreens.Length > 4)
-            {
-                tbScreen4Name.Visibility = Visibility.Visible;
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[4].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen5Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-            }
-            if (Screen.AllScreens.Length > 5)
-            {
-                tbScreen4Name.Visibility = Visibility.Visible;
-                PathDisplayTarget display = CommonData.dataInstance.findDisplayByScreenName(Screen.AllScreens[5].DeviceName);
-                if (display != null)
-                {
-                    CommonData.dataInstance.Screen6Name = display.FriendlyName;
-                    tbScreen1Name.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
-                }
-            }
-            tbScreen2AltKeyInfo.Visibility = (Screen.AllScreens.Length > 1) ? Visibility.Visible : Visibility.Hidden;
-            tbScreen2Name.Visibility = (Screen.AllScreens.Length > 1) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen2SetImage.Visibility = (Screen.AllScreens.Length > 1) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen3AltKeyInfo.Visibility = (Screen.AllScreens.Length > 2) ? Visibility.Visible : Visibility.Hidden;
-            tbScreen3Name.Visibility = (Screen.AllScreens.Length > 2) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen3SetImage.Visibility = (Screen.AllScreens.Length > 2) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen4AltKeyInfo.Visibility = (Screen.AllScreens.Length > 3) ? Visibility.Visible : Visibility.Hidden;
+            // Update label for image usage, instead of black color
+            tbScreen1SetImage.Text = String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen1) ? setImage : stopUsingImage;
+            tbScreen2SetImage.Text = String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen2) ? setImage : stopUsingImage;
+            tbScreen3SetImage.Text = String.IsNullOrEmpty(CommonData.dataInstance.ImageFileNameScreen3) ? setImage : stopUsingImage;
+
+            tbScreen2AltKeyInfo.Visibility = (nbScreens > 1) ? Visibility.Visible : Visibility.Hidden;
+            tbScreen2Name.Visibility = (nbScreens > 1) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen2SetImage.Visibility = (nbScreens > 1) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen3AltKeyInfo.Visibility = (nbScreens > 2) ? Visibility.Visible : Visibility.Hidden;
+            tbScreen3Name.Visibility = (nbScreens > 2) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen3SetImage.Visibility = (nbScreens > 2) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen4AltKeyInfo.Visibility = (nbScreens > 3) ? Visibility.Visible : Visibility.Hidden;
             // Collapsed used to hide complete line (screen 4,5,6) if there is not at least 4 screens used (presume large majority of users cases!)
-            tbScreen4Name.Visibility = (Screen.AllScreens.Length > 3) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen5AltKeyInfo.Visibility = (Screen.AllScreens.Length > 4) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen5Name.Visibility = (Screen.AllScreens.Length > 4) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen6AltKeyInfo.Visibility = (Screen.AllScreens.Length > 5) ? Visibility.Visible : Visibility.Collapsed;
-            tbScreen6Name.Visibility = (Screen.AllScreens.Length > 5) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen4Name.Visibility = (nbScreens > 3) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen5AltKeyInfo.Visibility = (nbScreens > 4) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen5Name.Visibility = (nbScreens > 4) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen6AltKeyInfo.Visibility = (nbScreens > 5) ? Visibility.Visible : Visibility.Collapsed;
+            tbScreen6Name.Visibility = (nbScreens > 5) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public void showWindow()
@@ -179,7 +103,7 @@ namespace BlackScreensWPF
 
         private void OnCloseButtonClick(object sender, RoutedEventArgs e)
         {
-            App.Current.Shutdown();
+            App.Quit();
         }
 
         private void sOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -201,7 +125,7 @@ namespace BlackScreensWPF
 
         private void bExit_Click(object sender, RoutedEventArgs e)
         {
-            App.Current.Shutdown();
+            App.Quit();
         }
 
         private void bMinimize_Click(object sender, RoutedEventArgs e)
@@ -246,12 +170,15 @@ namespace BlackScreensWPF
 
         private void notifyIcon_TrayRightMouseDown(object sender, RoutedEventArgs e)
         {
-            if (this.WindowState == WindowState.Minimized)
+            App.Safe(() =>
             {
-                miShowHideParameters.Header = "Show Parameters";
-            }
-            else
-                miShowHideParameters.Header = "Hide Parameters";
+                if (this.WindowState == WindowState.Minimized)
+                {
+                    miShowHideParameters.Header = "Show Parameters";
+                }
+                else
+                    miShowHideParameters.Header = "Hide Parameters";
+            }, "notifyIcon_TrayRightMouseDown()");
         }
 
         public void toggleShowHideWindow()
@@ -286,6 +213,12 @@ namespace BlackScreensWPF
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             CommonData.dataInstance.saveUserConfigFiles();
+            // Alt+F4 or similar while the app keeps running: hide instead, a closed window can't be shown again
+            if (!App.IsShuttingDown)
+            {
+                e.Cancel = true;
+                minimizeWindow();
+            }
         }
 
         private String debugOneScreenToString(System.Drawing.Rectangle r, String screenName, int screenNumber)
@@ -308,29 +241,11 @@ namespace BlackScreensWPF
         private void debugAllScreensInClipboard()
         {
             String debugTxt = "";
-            if (Screen.AllScreens.Length > 0)
+            IReadOnlyList<MonitorInfo> monitors = Monitors.GetAll();
+            for (int iMonitor = 0; iMonitor < monitors.Count; iMonitor++)
             {
-                debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen1TooltipData, CommonData.dataInstance.Screen1Name, 1);
-            }
-            if (Screen.AllScreens.Length > 1)
-            {
-                debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen2TooltipData, CommonData.dataInstance.Screen2Name, 2);
-                if (Screen.AllScreens.Length > 2)
-                {
-                    debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen3TooltipData, CommonData.dataInstance.Screen3Name, 3);
-                    if (Screen.AllScreens.Length > 3)
-                    {
-                        debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen4TooltipData, CommonData.dataInstance.Screen4Name, 4);
-                        if (Screen.AllScreens.Length > 4)
-                        {
-                            debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen5TooltipData, CommonData.dataInstance.Screen5Name, 5);
-                            if (Screen.AllScreens.Length > 5)
-                            {
-                                debugTxt += debugOneScreenToString(CommonData.dataInstance.Screen6TooltipData, CommonData.dataInstance.Screen6Name, 6);
-                            }
-                        }
-                    }
-                }
+                debugTxt += debugOneScreenToString(monitors[iMonitor].Bounds, monitors[iMonitor].FriendlyName, iMonitor + 1);
+                debugTxt += "Device " + monitors[iMonitor].DeviceName + " / " + monitors[iMonitor].DevicePath + Environment.NewLine + Environment.NewLine;
             }
             System.Windows.Clipboard.SetText(debugTxt);
         }
@@ -412,7 +327,7 @@ namespace BlackScreensWPF
 
         private void tbScreen3SetImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            String imageFileName = CommonData.dataInstance.ImageFileNameScreen2;
+            String imageFileName = CommonData.dataInstance.ImageFileNameScreen3;
             changeImage(tbScreen3SetImage, "screen 3", out imageFileName);
             CommonData.dataInstance.ImageFileNameScreen3 = imageFileName;
             CommonData.dataInstance.updateAllBlackWindowParams();
