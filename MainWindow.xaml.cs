@@ -21,7 +21,7 @@ namespace BlackScreensWPF
         {
             CommonData.dataInstance.LogToFile.Debug("MainWindow()");
             InitializeComponent();
-            this.tbTitle.Text = "BlackScreens 1.14";
+            this.tbTitle.Text = "BlackScreens " + typeof(MainWindow).Assembly.GetName().Version.ToString(3);
             CommonData.dataInstance.LogToFile.Info("MainWindow() "+ this.tbTitle.Text + " launching");
             this.DataContext = CommonData.dataInstance;
             notifyIcon.TrayLeftMouseDown += NotifyIcon_TrayLeftMouseDown;

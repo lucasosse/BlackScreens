@@ -457,3 +457,6 @@ $RECYCLE.BIN/
 
 # Hubertir specific
 NuGet.Config 
+
+# dotnet publish output
+publish/
