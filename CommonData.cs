@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Xml.Serialization;
 using NLog;
@@ -36,6 +37,7 @@ namespace BlackScreensWPF
         private bool reduceAppOnLaunch = false;
         private bool firstAppLaunch = true;
         private bool hideToTrayHintShown = false;
+        private Dictionary<string, string> hotkeys = HotkeyActions.Defaults();
         private int msDelayMouseCursorHide = 3000;
         private Logger logToFile = null;
         private string optionFileLocation = "";
@@ -56,6 +58,8 @@ namespace BlackScreensWPF
         public bool ReduceAppOnLaunch { get => reduceAppOnLaunch; set => reduceAppOnLaunch = value; }
         public bool FirstAppLaunch { get => firstAppLaunch; set => firstAppLaunch = value; }
         public bool HideToTrayHintShown { get => hideToTrayHintShown; set => hideToTrayHintShown = value; }
+        /// <summary>Hotkey text per action (see HotkeyActions), "" = disabled</summary>
+        public Dictionary<string, string> Hotkeys { get => hotkeys; set => hotkeys = value; }
 
         /// <summary>Screen name shown in the parameters window, screenNumber from 1 to 6</summary>
         public void SetScreenName(int screenNumber, string name)
@@ -192,7 +196,8 @@ namespace BlackScreensWPF
                 ImageFileNameScreen3 = CommonData.dataInstance.ImageFileNameScreen3,
                 ImageFileNameScreen4 = CommonData.dataInstance.ImageFileNameScreen4,
                 ImageFileNameScreen5 = CommonData.dataInstance.ImageFileNameScreen5,
-                ImageFileNameScreen6 = CommonData.dataInstance.ImageFileNameScreen6
+                ImageFileNameScreen6 = CommonData.dataInstance.ImageFileNameScreen6,
+                Hotkeys = CommonData.dataInstance.Hotkeys.Select(h => new HotkeyPref { Action = h.Key, Keys = h.Value }).ToList()
             };
 
             XmlSerializer mySerializer = new XmlSerializer(typeof(UserPreferences));
@@ -230,6 +235,7 @@ namespace BlackScreensWPF
             CommonData.dataInstance.ReduceAppOnLaunch = true;
             CommonData.dataInstance.FirstAppLaunch = true;
             CommonData.dataInstance.HideToTrayHintShown = false;
+            CommonData.dataInstance.Hotkeys = HotkeyActions.Defaults();
             CommonData.dataInstance.ImageFileNameScreen1 = "";
             CommonData.dataInstance.ImageFileNameScreen2 = "";
             CommonData.dataInstance.ImageFileNameScreen3 = "";
@@ -258,6 +264,15 @@ namespace BlackScreensWPF
                 CommonData.dataInstance.ImageFileNameScreen4 = up.ImageFileNameScreen4;
                 CommonData.dataInstance.ImageFileNameScreen5 = up.ImageFileNameScreen5;
                 CommonData.dataInstance.ImageFileNameScreen6 = up.ImageFileNameScreen6;
+                if (up.Hotkeys != null)
+                {
+                    foreach (HotkeyPref hotkeyPref in up.Hotkeys)
+                    {
+                        // Unknown actions (from a newer version) are ignored
+                        if (CommonData.dataInstance.Hotkeys.ContainsKey(hotkeyPref.Action ?? ""))
+                            CommonData.dataInstance.Hotkeys[hotkeyPref.Action] = hotkeyPref.Keys ?? "";
+                    }
+                }
             }
             catch (Exception ex)
             {

@@ -27,6 +27,7 @@ namespace BlackScreensWPF
             notifyIcon.TrayLeftMouseDown += NotifyIcon_TrayLeftMouseDown;
             refreshMainWindowCurrentScreen();
             updateScreenNames();
+            buildHotkeyEditor();
         }
 
         /// <summary>
@@ -198,6 +199,7 @@ namespace BlackScreensWPF
                 }
                 else
                     miShowHideParameters.Header = "Hide Parameters";
+                rebuildTrayActions();
             }, "notifyIcon_TrayRightMouseDown()");
         }
 

@@ -1,5 +1,16 @@
-﻿namespace BlackScreensWPF
+﻿using System.Collections.Generic;
+
+namespace BlackScreensWPF
 {
+    /// <summary>
+    /// One hotkey in the preferences file. Keys empty = disabled.
+    /// </summary>
+    public class HotkeyPref
+    {
+        public string Action { get; set; } = "";
+        public string Keys { get; set; } = "";
+    }
+
     public class UserPreferences
     {
         internal int _Opacity = 90;
@@ -92,5 +103,8 @@
             get { return _ImageFileNameScreen6; }
             set { _ImageFileNameScreen6 = value; }
         }
+
+        // Missing in files written by v1.14 and older: defaults are used then
+        public List<HotkeyPref> Hotkeys { get; set; }
     }
 }

@@ -315,7 +315,20 @@
             <Button Grid.Row="7" Grid.Column="1" Margin="5 15 5 0" Height="30" Grid.ColumnSpan="2" Name="bMinimize" Click="bMinimize_Click">
                 <TextBlock Text="{x:Static rs:Resources.minimizeBtn}"></TextBlock>
             </Button>
-            <StackPanel Grid.Row="8" Grid.ColumnSpan="3" Orientation="Horizontal" Visibility="Collapsed" Height="auto" Width="auto" Name="spUpdatesHistory" Background="#262626">
+            <Expander Grid.Row="8" Grid.ColumnSpan="3" Margin="5 12 5 0" Name="expHotkeys" Foreground="White" FontSize="15" Header="Hotkeys">
+                <StackPanel Margin="20 6 10 4">
+                    <TextBlock FontSize="12" Foreground="#FFAAAAAA" TextWrapping="Wrap" Margin="0 0 0 6">Click a box and press the new combination. Backspace clears it, Esc cancels.</TextBlock>
+                    <Grid Name="gridHotkeys">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="230"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                    <TextBlock Name="tbResetHotkeys" FontSize="12" Foreground="#FF9CC9FF" Cursor="Hand" Margin="0 8 0 0" HorizontalAlignment="Left" MouseLeftButtonDown="tbResetHotkeys_MouseLeftButtonDown">Reset hotkeys to defaults</TextBlock>
+                </StackPanel>
+            </Expander>
+            <StackPanel Grid.Row="9" Grid.ColumnSpan="3" Orientation="Horizontal" Visibility="Collapsed" Height="auto" Width="auto" Name="spUpdatesHistory" Background="#262626">
                 <Expander Name="expUpdatesHistory" Margin="0 0 0 0" IsExpanded="True" Collapsed="expUpdatesHistory_Collapsed" Cursor="Hand"/>
                 <RichTextBox HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Auto" Width="765" Name="rtbAboutText" Height="auto" IsDocumentEnabled="True" Background="Transparent" Foreground="White" AcceptsReturn="True" AcceptsTab="True" BorderBrush="Transparent" BorderThickness="0" IsReadOnly="True" MaxHeight="250">
                     <FlowDocument PageWidth="{Binding Path=ActualWidth, ElementName=rtbAboutText, Mode=OneWay}">
@@ -357,6 +370,7 @@
                     MenuActivation="RightClick" TrayRightMouseDown="notifyIcon_TrayRightMouseDown">
             <taskbarnotification:TaskbarIcon.ContextMenu>
                 <ContextMenu>
+                    <Separator Name="sepTrayActions"/>
                     <MenuItem Header="Show parameters" Name="miShowHideParameters" Click="miShowHideParameters_Click"/>
                     <MenuItem Header="About BlackScreens" Name="miAbout" Click="miAbout_Click"/>
                     <Separator/>
