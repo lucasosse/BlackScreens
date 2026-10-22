@@ -360,7 +360,8 @@ namespace BlackScreensWPF
          private void Hyperlink_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             Hyperlink hl = (Hyperlink)sender;
-            System.Diagnostics.Process.Start(hl.NavigateUri.AbsoluteUri);
+            // .NET (Core) no longer shell-executes by default, which is needed to open a URL
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(hl.NavigateUri.AbsoluteUri) { UseShellExecute = true });
         }
 
         private void cbClickThrough_Click(object sender, RoutedEventArgs e)

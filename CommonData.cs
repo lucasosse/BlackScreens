@@ -5,7 +5,6 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web.ApplicationServices;
 using System.Windows.Forms;
 using WindowsDisplayAPI.DisplayConfig;
 using NLog;
