@@ -35,6 +35,7 @@ namespace BlackScreensWPF
         private bool clickThrough = false;
         private bool reduceAppOnLaunch = false;
         private bool firstAppLaunch = true;
+        private bool hideToTrayHintShown = false;
         private int msDelayMouseCursorHide = 3000;
         private Logger logToFile = null;
         private string optionFileLocation = "";
@@ -54,6 +55,7 @@ namespace BlackScreensWPF
         public bool ClickThrough { get => clickThrough; set => clickThrough = value; }
         public bool ReduceAppOnLaunch { get => reduceAppOnLaunch; set => reduceAppOnLaunch = value; }
         public bool FirstAppLaunch { get => firstAppLaunch; set => firstAppLaunch = value; }
+        public bool HideToTrayHintShown { get => hideToTrayHintShown; set => hideToTrayHintShown = value; }
 
         /// <summary>Screen name shown in the parameters window, screenNumber from 1 to 6</summary>
         public void SetScreenName(int screenNumber, string name)
@@ -150,6 +152,27 @@ namespace BlackScreensWPF
             }
         }
 
+        private System.Windows.Threading.DispatcherTimer saveTimer;
+
+        /// <summary>
+        /// Save preferences shortly after a change (debounced: the opacity slider fires on every step),
+        /// so nothing is lost if Windows shuts down or the app is killed. Call from the UI thread.
+        /// </summary>
+        public void scheduleSave()
+        {
+            if (saveTimer == null)
+            {
+                saveTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                saveTimer.Tick += (s, e) =>
+                {
+                    saveTimer.Stop();
+                    saveUserConfigFiles();
+                };
+            }
+            saveTimer.Stop();
+            saveTimer.Start();
+        }
+
         /// <summary>
         /// Save user config file by XmlSerializer
         /// </summary>
@@ -163,6 +186,7 @@ namespace BlackScreensWPF
                 MsDelayMouseCursorHide = CommonData.dataInstance.MsDelayMouseCursorHide,
                 FirstAppLaunch = CommonData.dataInstance.FirstAppLaunch,
                 ReduceAppOnLaunch = CommonData.dataInstance.ReduceAppOnLaunch,
+                HideToTrayHintShown = CommonData.dataInstance.HideToTrayHintShown,
                 ImageFileNameScreen1 = CommonData.dataInstance.ImageFileNameScreen1,
                 ImageFileNameScreen2 = CommonData.dataInstance.ImageFileNameScreen2,
                 ImageFileNameScreen3 = CommonData.dataInstance.ImageFileNameScreen3,
@@ -202,8 +226,10 @@ namespace BlackScreensWPF
             CommonData.dataInstance.HideTexts = false;
             CommonData.dataInstance.Opacity = 90;
             CommonData.dataInstance.MsDelayMouseCursorHide = 3000;
-            CommonData.dataInstance.ReduceAppOnLaunch = false;
+            // New installs start in the tray (the window still opens on the very first launch)
+            CommonData.dataInstance.ReduceAppOnLaunch = true;
             CommonData.dataInstance.FirstAppLaunch = true;
+            CommonData.dataInstance.HideToTrayHintShown = false;
             CommonData.dataInstance.ImageFileNameScreen1 = "";
             CommonData.dataInstance.ImageFileNameScreen2 = "";
             CommonData.dataInstance.ImageFileNameScreen3 = "";
@@ -224,6 +250,7 @@ namespace BlackScreensWPF
                 CommonData.dataInstance.ClickThrough = up.ClickThrough;
                 CommonData.dataInstance.ReduceAppOnLaunch = up.ReduceAppOnLaunch;
                 CommonData.dataInstance.FirstAppLaunch = up.FirstAppLaunch;
+                CommonData.dataInstance.HideToTrayHintShown = up.HideToTrayHintShown;
                 CommonData.dataInstance.MsDelayMouseCursorHide = up.MsDelayMouseCursorHide;
                 CommonData.dataInstance.ImageFileNameScreen1 = up.ImageFileNameScreen1;
                 CommonData.dataInstance.ImageFileNameScreen2 = up.ImageFileNameScreen2;

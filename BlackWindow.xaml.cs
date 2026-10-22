@@ -21,8 +21,10 @@ namespace BlackScreensWPF
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         private const UInt32 SWP_NOSIZE = 0x0001;
         private const UInt32 SWP_NOMOVE = 0x0002;
+        private const UInt32 SWP_NOACTIVATE = 0x0010;
         private const UInt32 SWP_ASYNCWINDOWPOS = 0x4000;
-        private const UInt32 TOPMOST_FLAGS = SWP_NOMOVE | SWP_NOSIZE | SWP_ASYNCWINDOWPOS;
+        // NOACTIVATE: covering a screen must not steal keyboard focus from the app being used on another one
+        private const UInt32 TOPMOST_FLAGS = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int GWL_EXSTYLE = (-20);
 
@@ -85,7 +87,6 @@ namespace BlackScreensWPF
         public void updateBlackWindowParams()
         {
             this.Opacity = (Double)(CommonData.dataInstance.Opacity) / 100;
-            this.Activate();
             setWindowsClickThrough(CommonData.dataInstance.ClickThrough);
             string imageNameToUse = "";
             switch (this.screenNumber)
@@ -215,7 +216,6 @@ namespace BlackScreensWPF
             tbClickHelp.Visibility = vTexts;
             tbKeyboardHelp.Visibility = vTexts;
             this.Show();
-            this.Activate();
             // Ensure that black Window is on top, even if Windows.Minized was used on main screen
             putWindowsOnTop();
             launchInfoAnimation();

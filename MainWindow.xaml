@@ -7,7 +7,7 @@
         xmlns:rs="clr-namespace:BlackScreens.Properties"
         mc:Ignorable="d"
         Title="BlackScreens"
-        FontSize="18" Foreground="White" Background="Black" FontFamily="Ubuntu" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize" BorderThickness="1" WindowStyle="None" StateChanged="Window_StateChanged" Loaded="Window_Loaded" KeyDown="Window_KeyDown" Topmost="True" Closing="Window_Closing" Width="800" SizeToContent="Height">
+        FontSize="18" Foreground="White" Background="Black" FontFamily="Ubuntu" WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize" BorderThickness="1" WindowStyle="None" StateChanged="Window_StateChanged" Loaded="Window_Loaded" KeyDown="Window_KeyDown" Closing="Window_Closing" Width="800" SizeToContent="Height">
     <Window.Resources>
         <Style x:Key="FocusVisual">
             <Setter Property="Control.Template">
@@ -304,7 +304,7 @@
             </Slider>
             <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0 10 0 0">
                 <TextBlock Grid.Row="6" Grid.Column="0" HorizontalAlignment="Center" Text="{x:Static rs:Resources.hideTexts}" Margin="70 0 15 0"></TextBlock>
-                <CheckBox Grid.Row="6" Grid.Column="0" HorizontalAlignment="Center" Name="cbShowTexts" Margin="0 0 75 0" Background="Black" Foreground="#FFFDFDFD" Style="{DynamicResource CheckBoxStyleBlack}" IsChecked="{Binding HideTexts}"></CheckBox>
+                <CheckBox Grid.Row="6" Grid.Column="0" HorizontalAlignment="Center" Name="cbShowTexts" Margin="0 0 75 0" Background="Black" Foreground="#FFFDFDFD" Style="{DynamicResource CheckBoxStyleBlack}" IsChecked="{Binding HideTexts}" Click="cbShowTexts_Click"></CheckBox>
                 <TextBlock Grid.Row="6" Grid.Column="1" HorizontalAlignment="Center" Text="{x:Static rs:Resources.allowClickThrough}" Margin="0 0 15 0"></TextBlock>
                 <CheckBox Grid.Row="6" Grid.Column="1" HorizontalAlignment="Center" Name="cbClickThrough" Margin="0 0 75 0" Background="Black" Foreground="#FFFDFDFD" Style="{DynamicResource CheckBoxStyleBlack}" IsChecked="{Binding ClickThrough}" Click="cbClickThrough_Click"></CheckBox>
                 <TextBlock Grid.Row="6" Grid.Column="2" HorizontalAlignment="Center" Text="{x:Static rs:Resources.hideOnTaskbarOnStart}" Margin="0 0 15 0"></TextBlock>

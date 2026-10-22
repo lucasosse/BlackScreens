@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BlackScreensWPF
 {
@@ -45,10 +46,20 @@ namespace BlackScreensWPF
             App.Safe(toggleShowHideWindow, "NotifyIcon_TrayLeftMouseDown()");
         }
 
+        /// <summary>
+        /// True when the settings window is on screen (not hidden in the tray)
+        /// </summary>
+        public bool IsShownToUser => this.IsVisible && (this.WindowState != WindowState.Minimized);
+
+        /// <summary>
+        /// Send the settings window to the tray: hidden, not just minimized (a minimized window without
+        /// taskbar button would linger as a small title bar above the taskbar)
+        /// </summary>
         public void minimizeWindow()
         {
             this.WindowState = WindowState.Minimized;
             this.ShowInTaskbar = false;
+            this.Hide();
         }
 
         /// <summary>
@@ -89,7 +100,8 @@ namespace BlackScreensWPF
 
         public void showWindow()
         {
-            this.Topmost = true;
+            // Only stay above other windows while a black window could cover this one
+            this.Topmost = CommonData.dataInstance.BlackWindows.Any(bw => (bw != null) && bw.IsVisible);
             this.WindowState = WindowState.Normal;
             this.ShowInTaskbar = true;
             this.Show();
@@ -103,12 +115,20 @@ namespace BlackScreensWPF
 
         private void OnCloseButtonClick(object sender, RoutedEventArgs e)
         {
-            App.Quit();
+            // X keeps the app (and its hotkeys) running in the tray; Exit is in the tray menu and on the Exit button
+            minimizeWindow();
+            if (!CommonData.dataInstance.HideToTrayHintShown)
+            {
+                notifyIcon.ShowBalloonTip("BlackScreens is still running", "Hotkeys keep working. Use the tray icon to open settings or exit.", Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+                CommonData.dataInstance.HideToTrayHintShown = true;
+                CommonData.dataInstance.saveUserConfigFiles();
+            }
         }
 
         private void sOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
         }
 
         private void Window_StateChanged(object sender, EventArgs e)
@@ -172,7 +192,7 @@ namespace BlackScreensWPF
         {
             App.Safe(() =>
             {
-                if (this.WindowState == WindowState.Minimized)
+                if (!IsShownToUser)
                 {
                     miShowHideParameters.Header = "Show Parameters";
                 }
@@ -183,7 +203,7 @@ namespace BlackScreensWPF
 
         public void toggleShowHideWindow()
         {
-            if (this.WindowState == WindowState.Minimized)
+            if (!IsShownToUser)
             {
                 showWindow();
             }
@@ -282,11 +302,18 @@ namespace BlackScreensWPF
         private void cbClickThrough_Click(object sender, RoutedEventArgs e)
         {
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
+        }
+
+        private void cbShowTexts_Click(object sender, RoutedEventArgs e)
+        {
+            CommonData.dataInstance.scheduleSave();
         }
 
         private void cbHideOnTaskBarOnStart_Click(object sender, RoutedEventArgs e)
         {
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
         }
 
         private void changeImage(TextBlock tbImageButton, string screenName, out String imageName)
@@ -315,6 +342,7 @@ namespace BlackScreensWPF
             changeImage(tbScreen1SetImage, "screen 1", out imageFileName);
             CommonData.dataInstance.ImageFileNameScreen1 = imageFileName;
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
         }
 
         private void tbScreen2SetImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -323,6 +351,7 @@ namespace BlackScreensWPF
             changeImage(tbScreen2SetImage, "screen 2", out imageFileName);
             CommonData.dataInstance.ImageFileNameScreen2 = imageFileName;
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
         }
 
         private void tbScreen3SetImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -331,6 +360,7 @@ namespace BlackScreensWPF
             changeImage(tbScreen3SetImage, "screen 3", out imageFileName);
             CommonData.dataInstance.ImageFileNameScreen3 = imageFileName;
             CommonData.dataInstance.updateAllBlackWindowParams();
+            CommonData.dataInstance.scheduleSave();
         }
     }
 }

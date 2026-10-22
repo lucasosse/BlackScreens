@@ -14,6 +14,7 @@ namespace BlackScreensWPF
     public partial class App : System.Windows.Application
     {
         public KeyboardHook kh;
+        private SingleInstance singleInstance;
 
         /// <summary>
         /// True once the app is really quitting. Until then, closing a window only hides it
@@ -53,13 +54,16 @@ namespace BlackScreensWPF
         {
             // For testing languages localization purpose
             //System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("en");
-            // Check for duplicate launch of application
-            String thisprocessname = Process.GetCurrentProcess().ProcessName;
-            if (Process.GetProcesses().Count(p => p.ProcessName == thisprocessname) > 1)
+            // Already running: hand our command line over (no arguments = open its settings) and leave
+            singleInstance = new SingleInstance();
+            if (!singleInstance.IsFirstInstance)
             {
+                SingleInstance.SendToRunningInstance(e.Args);
                 Quit();
                 return;
             }
+            // --tray: started at login, stay in the tray whatever the preferences say
+            bool startInTray = e.Args.Any(a => String.Equals(a, "--tray", StringComparison.OrdinalIgnoreCase));
 
             DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
@@ -89,7 +93,7 @@ namespace BlackScreensWPF
             CommonData.dataInstance.loadUserConfigFile(CommonData.dataInstance.FParams);
             CommonData.dataInstance.LogToFile.Debug("App/xaml.cs.App_Startup() FirstAppLaunch = "+ CommonData.dataInstance.FirstAppLaunch);
             CommonData.dataInstance.LogToFile.Debug("App/xaml.cs.App_Startup() ReduceAppOnLaunch = " + CommonData.dataInstance.ReduceAppOnLaunch);
-            if ((CommonData.dataInstance.FirstAppLaunch == true) || (CommonData.dataInstance.ReduceAppOnLaunch == false))
+            if (!startInTray && ((CommonData.dataInstance.FirstAppLaunch == true) || (CommonData.dataInstance.ReduceAppOnLaunch == false)))
             {
                 CommonData.dataInstance.FParams.showWindow();
             }
@@ -98,7 +102,39 @@ namespace BlackScreensWPF
                 CommonData.dataInstance.FParams.updateScreenNames();
                 CommonData.dataInstance.FParams.minimizeWindow();
             }
-            CommonData.dataInstance.FirstAppLaunch = false;
+            if (CommonData.dataInstance.FirstAppLaunch)
+            {
+                CommonData.dataInstance.FirstAppLaunch = false;
+                CommonData.dataInstance.saveUserConfigFiles();
+            }
+
+            singleInstance.StartListening(args => Dispatcher.BeginInvoke(() => Safe(() => handleCommand(args), "handleCommand()")));
+        }
+
+        /// <summary>
+        /// Command line received from a later launch of BlackScreens
+        /// </summary>
+        private void handleCommand(string[] args)
+        {
+            CommonData.dataInstance.LogToFile.Info("Command received: '" + String.Join(" ", args) + "'");
+            string command = args.FirstOrDefault(a => !a.StartsWith("--"))?.ToLowerInvariant();
+            if (command == null)
+            {
+                // Plain relaunch opens settings; a second "--tray" start (e.g. at login) does nothing
+                if (args.Length > 0)
+                    return;
+                command = "settings";
+            }
+            switch (command)
+            {
+                case "settings":
+                case "show":
+                    CommonData.dataInstance.FParams.showWindow();
+                    break;
+                default:
+                    CommonData.dataInstance.LogToFile.Warn("Unknown command '" + command + "'");
+                    break;
+            }
         }
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -310,6 +346,7 @@ namespace BlackScreensWPF
             SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
             SystemEvents.PowerModeChanged -= SystemEvents_PowerModeChanged;
             kh?.unhook();
+            singleInstance?.Dispose();
         }
 
         protected override void OnSessionEnding(SessionEndingCancelEventArgs e)

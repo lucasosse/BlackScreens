@@ -37,6 +37,13 @@
             set { _ReduceAppOnLaunch = value; }
         }
 
+        internal bool _HideToTrayHintShown = false;
+        public bool HideToTrayHintShown
+        {
+            get { return _HideToTrayHintShown; }
+            set { _HideToTrayHintShown = value; }
+        }
+
         internal bool _FirstAppLaunch = true;
         public bool FirstAppLaunch
         {
